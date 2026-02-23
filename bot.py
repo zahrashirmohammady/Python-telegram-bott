@@ -62,7 +62,7 @@
 
 # 7
 #
-# from uuid import uuid4
+from uuid import uuid4
 from config import TOKEN
 from telegram import InlineQueryResultPhoto, Update, InlineQueryResultArticle, InputTextMessageContent
 from telegram.ext import Application, ContextTypes, InlineQueryHandler
