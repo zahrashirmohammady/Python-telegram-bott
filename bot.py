@@ -61,36 +61,63 @@
 
 
 # 7
-
-from html import escape
-from uuid import uuid4
-from wsgiref.util import application_uri
-
+#
+# from uuid import uuid4
 from config import TOKEN
-from  telegram import InlineQueryResultArticle, InputTextMessageContent, Update, InlineQueryResultPhoto
-from telegram.constants import ParseMode
-from telegram.ext import Application, ContextTypes, InlineQueryHandler, Updater, CallbackContext
+from telegram import InlineQueryResultPhoto, Update, InlineQueryResultArticle, InputTextMessageContent
+from telegram.ext import Application, ContextTypes, InlineQueryHandler
 
 
 async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.inline_query.query
 
-    if not query :
+    if not query:
         return
 
     results = [
-        InlineQueryResultArticle(id= str(uuid4()), photo_url)=
+        InlineQueryResultPhoto(
+            id=str(uuid4()),
+            photo_url="https://docs.python-telegram-bot.org/en/stable/_static/ptb-logo_1024.png",
+            thumbnail_url="https://docs.python-telegram-bot.org/en/stable/_static/ptb-logo_1024.png",),
+        InlineQueryResultArticle(id= str(uuid4()),title="BOT",url="https://docs.python-telegram-bot.org/en/stable/",input_message_content=InputTextMessageContent("Bot"))
     ]
 
-   await update.inline_query.answer(results)
+    await update.inline_query.answer(results)
 
-def main()-> None:
+
+def main() -> None:
     application = Application.builder().token(TOKEN).build()
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    application.add_handler(InlineQueryHandler(inline_query))
+    application.run_polling()
 
 
+if __name__ == '__main__':
+    main()
 
 
-
-
-    if __name__ == '__main__':
+#
+# from telegram import Update, MessageEntity
+# from telegram.ext import ContextTypes, Application, MessageHandler, filters
+# from config import TOKEN
+#
+#
+# async def delete_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+#     if not update.message:
+#         return
+#
+#     if update.message.chat.type in ["group", "supergroup"]:
+#
+#         entities = update.message.parse_entities([MessageEntity.URL])
+#
+#         if entities:
+#             await update.message.delete()
+#
+#
+# def main():
+#     application = Application.builder().token(TOKEN).build()
+#     application.add_handler(MessageHandler(filters.ALL, delete_message))
+#     application.run_polling()
+#
+#
+# if __name__ == '__main__':
+#     main()
