@@ -215,7 +215,7 @@
 # 11
 from config import TOKEN
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import CommandHandler, Application, ContextTypes, CallbackQueryHandler, CallbackContext
+from telegram.ext import CommandHandler, Application, ContextTypes, CallbackQueryHandler, CallbackContext, Updater
 
 BOT2_CHANNEL= "@bott2za"
 MAIN_CHANNEL_LINK = "https://t.me/SmartyPaantsBott"
@@ -223,7 +223,7 @@ MAIN_CHANNEL_LINK = "https://t.me/SmartyPaantsBott"
 async def is_member(bot, channel, user_id):
     try:
       member = await bot.get_chat_member(channel, user_id)
-      return member.status in ("member", "administrator, owner")
+      return member.status in ("member", "administrator", "creator")
     except:
        return False
 
@@ -235,12 +235,41 @@ async def start (update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyword = [InlineKeyboardButton("enter main channel ", url=MAIN_CHANNEL_LINK)]
         await update.message.reply_text("Your subcription approved", reply_markup=InlineKeyboardMarkup(keyword))
     else:
-        keyword =[
-            [InlineKeyboardButton("You must subscribe in required channel "
-                                  , url=f"https://t.me/{BOT2_CHANNEL.replace('@','')}")]
-            [InlineKeyboardButton("check subscription ", callback_data="subscribe")]
+        keyword = [
+            [InlineKeyboardButton(
+                "You must subscribe in required channel",
+                url=f"https://t.me/{BOT2_CHANNEL.replace('@', '')}"
+            )],
+            [InlineKeyboardButton(
+                "Check subscription",
+                callback_data="subscribe"
+            )]
         ]
+    await update.message.reply_text("You must subscribe in required channel first",
+                                    reply_markup=InlineKeyboardMarkup(keyword))
 
+
+async def check_membership (update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+
+    if await is_member(context.bot, BOT2_CHANNEL, user_id):
+        await query.edit_message_text(f"Your subscription approved \n\n, main channel link\n\n{MAIN_CHANNEL_LINK}")
+    else:
+        await context.bot.send_message(update.effective_chat.id, f"You must subscribe in required channel first")
+
+
+def main():
+    app= Application.builder().token(TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CallbackQueryHandler(check_membership, pattern="subscribe"))
+    app.run_polling(allowed_updates=Update.ALL_TYPES)
+
+
+
+if __name__ == '__main__':
+    main()
 
 
 
