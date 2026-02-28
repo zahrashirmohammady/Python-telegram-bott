@@ -213,63 +213,177 @@
 
 
 # 11
+# from config import TOKEN
+# from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+# from telegram.ext import CommandHandler, Application, ContextTypes, CallbackQueryHandler, CallbackContext, Updater
+#
+# BOT2_CHANNEL= "@bott2za"
+# MAIN_CHANNEL_LINK = "https://t.me/SmartyPaantsBott"
+#
+# async def is_member(bot, channel, user_id):
+#     try:
+#       member = await bot.get_chat_member(channel, user_id)
+#       return member.status in ("member", "administrator", "creator")
+#     except:
+#        return False
+#
+#
+# async def start (update: Update, context: ContextTypes.DEFAULT_TYPE):
+#     user_id = update.effective_user.id
+#
+#     if await is_member(context.bot, BOT2_CHANNEL, user_id):
+#         keyword = [InlineKeyboardButton("enter main channel ", url=MAIN_CHANNEL_LINK)]
+#         await update.message.reply_text("Your subcription approved", reply_markup=InlineKeyboardMarkup(keyword))
+#     else:
+#         keyword = [
+#             [InlineKeyboardButton(
+#                 "You must subscribe in required channel",
+#                 url=f"https://t.me/{BOT2_CHANNEL.replace('@', '')}"
+#             )],
+#             [InlineKeyboardButton(
+#                 "Check subscription",
+#                 callback_data="subscribe"
+#             )]
+#         ]
+#     await update.message.reply_text("You must subscribe in required channel first",
+#                                     reply_markup=InlineKeyboardMarkup(keyword))
+#
+#
+# async def check_membership (update: Update, context: ContextTypes.DEFAULT_TYPE):
+#     query = update.callback_query
+#     await query.answer()
+#     user_id = query.from_user.id
+#
+#     if await is_member(context.bot, BOT2_CHANNEL, user_id):
+#         await query.edit_message_text(f"Your subscription approved \n\n, main channel link\n\n{MAIN_CHANNEL_LINK}")
+#     else:
+#         await context.bot.send_message(update.effective_chat.id, f"You must subscribe in required channel first")
+#
+#
+# def main():
+#     app= Application.builder().token(TOKEN).build()
+#     app.add_handler(CommandHandler("start", start))
+#     app.add_handler(CallbackQueryHandler(check_membership, pattern="subscribe"))
+#     app.run_polling(allowed_updates=Update.ALL_TYPES)
+#
+#
+#
+# if __name__ == '__main__':
+#     main()
+#
+#
+# 12
+import sqlite3
+from telegram import Update
+from telegram.constants import ParseMode
+from telegram.ext import Application, MessageHandler, ContextTypes, filters, CallbackContext, Updater
 from config import TOKEN
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import CommandHandler, Application, ContextTypes, CallbackQueryHandler, CallbackContext, Updater
 
-BOT2_CHANNEL= "@bott2za"
-MAIN_CHANNEL_LINK = "https://t.me/SmartyPaantsBott"
-
-async def is_member(bot, channel, user_id):
-    try:
-      member = await bot.get_chat_member(channel, user_id)
-      return member.status in ("member", "administrator", "creator")
-    except:
-       return False
+DB_NAME = "warnings.db"
+N = BAD_WORDS = ["فحش", "زشت"]
 
 
-async def start (update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
+def init_db():
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS warnings (
+            user_id INTEGER,
+            chat_id INTEGER,
+            count INTEGER,
+            PRIMARY KEY (user_id, chat_id)
+        )
+    """)
+    conn.commit()
+    conn.close()
 
-    if await is_member(context.bot, BOT2_CHANNEL, user_id):
-        keyword = [InlineKeyboardButton("enter main channel ", url=MAIN_CHANNEL_LINK)]
-        await update.message.reply_text("Your subcription approved", reply_markup=InlineKeyboardMarkup(keyword))
+
+def get_warnings(user_id, chat_id):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT count FROM warnings WHERE user_id = ? AND chat_id = ?",
+        (user_id, chat_id)
+    )
+    row = cursor.fetchone()
+    conn.close()
+    return row[0] if row else 0
+
+
+def set_warnings(user_id, chat_id, count):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO warnings (user_id, chat_id, count)
+        VALUES (?, ?, ?)
+        ON CONFLICT(user_id, chat_id)
+        DO UPDATE SET count = excluded.count
+    """, (user_id, chat_id, count))
+    conn.commit()
+    conn.close()
+
+
+def reset_warnings(user_id, chat_id):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute(
+        "DELETE FROM warnings WHERE user_id = ? AND chat_id = ?",
+        (user_id, chat_id)
+    )
+    conn.commit()
+    conn.close()
+
+
+def has_bad_words(text):
+    text = text.lower()
+    for word in BAD_WORDS:
+        if word in text:
+            return True
+    return False
+
+
+async def contains_bad_words(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.text:
+        return
+
+    chat = update.effective_chat
+    if chat.type not in ["group", "supergroup"]:
+        return
+
+    user = update.effective_user
+    text = update.message.text
+
+    if not has_bad_words(text):
+        return
+
+    user_id = user.id
+    chat_id = chat.id
+
+    await update.message.delete()
+
+    warnings = get_warnings(user_id, chat_id) + 1
+    set_warnings(user_id, chat_id, warnings)
+
+    if warnings < 3:
+        await chat.send_message(
+            f"{user.mention_html()} please do not use bad words.\nwarning {warnings} of 3",
+            parse_mode=ParseMode.HTML
+        )
     else:
-        keyword = [
-            [InlineKeyboardButton(
-                "You must subscribe in required channel",
-                url=f"https://t.me/{BOT2_CHANNEL.replace('@', '')}"
-            )],
-            [InlineKeyboardButton(
-                "Check subscription",
-                callback_data="subscribe"
-            )]
-        ]
-    await update.message.reply_text("You must subscribe in required channel first",
-                                    reply_markup=InlineKeyboardMarkup(keyword))
-
-
-async def check_membership (update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    user_id = query.from_user.id
-
-    if await is_member(context.bot, BOT2_CHANNEL, user_id):
-        await query.edit_message_text(f"Your subscription approved \n\n, main channel link\n\n{MAIN_CHANNEL_LINK}")
-    else:
-        await context.bot.send_message(update.effective_chat.id, f"You must subscribe in required channel first")
+        await context.bot.ban_chat_member(chat_id=chat_id, user_id=user_id)
+        reset_warnings(user_id, chat_id)
+        await chat.send_message(
+            f"{user.mention_html()} banned for using too many bad words",
+            parse_mode=ParseMode.HTML
+        )
 
 
 def main():
-    app= Application.builder().token(TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(check_membership, pattern="subscribe"))
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
+    init_db()
+    app = Application.builder().token(TOKEN).build()
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, contains_bad_words))
+    app.run_polling()
 
 
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
-
-
-
